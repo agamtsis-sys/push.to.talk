@@ -1,15 +1,18 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Walkie Talkie</title>
+  <title>Walkie Talkie Pro</title>
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
-<body style="font-family:sans-serif; text-align:center; margin-top:50px;">
+<body style="font-family:sans-serif; text-align:center; margin-top:30px;">
  
-<h1>📡 Walkie Talkie (File Mode)</h1>
+<h1>📡 Walkie Talkie Pro</h1>
  
 <h3>Your ID:</h3>
 <p id="myid">...</p>
+ 
+<input id="customid" placeholder="Set your ID">
+<button onclick="setID()">Set ID</button>
  
 <h3>Status:</h3>
 <p id="status">❌ Not connected</p>
@@ -19,17 +22,25 @@
  
 <br><br>
  
+<!-- 🔴🟢 LIGHT -->
+<div id="light" style="width:30px;height:30px;border-radius:50%;background:red;margin:auto;"></div>
+ 
+<br>
+ 
 <button 
   onmousedown="startRecording()" 
   onmouseup="stopRecording()"
   ontouchstart="startRecording()" 
   ontouchend="stopRecording()"
-  style="padding:25px; font-size:20px;">
+  style="padding:20px;font-size:18px;">
   🎤 HOLD TO TALK
 </button>
  
+<h3>📥 Received / Queue</h3>
+<ul id="queueList"></ul>
+ 
 <script>
-let peer = new Peer();
+let peer;
 let conn;
  
 let mediaRecorder;
@@ -37,21 +48,37 @@ let audioChunks = [];
  
 let queue = [];
 let isPlaying = false;
+let counter = 1;
  
-// INIT
-peer.on('open', id => {
-  document.getElementById("myid").innerText = id;
-});
+// 🔧 CREATE PEER
+function createPeer(id=null) {
+  peer = new Peer(id);
  
-// RECEIVE CONNECTION
-peer.on('connection', connection => {
-  conn = connection;
-  setupConnection();
-});
+  peer.on('open', id => {
+    document.getElementById("myid").innerText = id;
+  });
+ 
+  peer.on('connection', connection => {
+    conn = connection;
+    setupConnection();
+    document.getElementById("status").innerText = "✅ Connected";
+  });
+}
+ 
+// SET CUSTOM ID
+function setID() {
+  let id = document.getElementById("customid").value;
+  if (!id) return alert("Enter ID");
+ 
+  if (peer) peer.destroy();
+  createPeer(id);
+}
  
 // CONNECT
 function connect() {
-  const id = document.getElementById("connectid").value;
+  let id = document.getElementById("connectid").value;
+  if (!id) return alert("Enter other ID");
+ 
   conn = peer.connect(id);
  
   conn.on('open', () => {
@@ -64,44 +91,22 @@ function connect() {
 // HANDLE DATA
 function setupConnection() {
   conn.on('data', data => {
-    console.log("Received audio");
- 
-    queue.push(data);
-    playQueue();
+    addToQueue(data);
   });
 }
  
-// 🎤 START RECORD
-async function startRecording() {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+// ADD TO QUEUE + UI
+function addToQueue(blob) {
+  queue.push(blob);
  
-  mediaRecorder = new MediaRecorder(stream);
-  audioChunks = [];
+  let li = document.createElement("li");
+  li.innerText = "Message " + counter++;
+  document.getElementById("queueList").appendChild(li);
  
-  mediaRecorder.ondataavailable = e => {
-    audioChunks.push(e.data);
-  };
- 
-  mediaRecorder.start();
- 
-  beep(true);
+  playQueue();
 }
  
-// 🛑 STOP RECORD + SEND
-function stopRecording() {
-  mediaRecorder.stop();
- 
-  mediaRecorder.onstop = () => {
-    const blob = new Blob(audioChunks, { type: 'audio/webm' });
- 
-    conn.send(blob);
-    console.log("Sent audio");
- 
-    beep(false);
-  };
-}
- 
-// 🔊 PLAY QUEUE
+// PLAY QUEUE
 function playQueue() {
   if (isPlaying || queue.length === 0) return;
  
@@ -118,19 +123,59 @@ function playQueue() {
   audio.play();
 }
  
-// 🔔 BEEP SOUND
+// 🎤 START RECORD
+async function startRecording() {
+  if (!conn || !conn.open) {
+    alert("Not connected!");
+    return;
+  }
+ 
+  document.getElementById("light").style.background = "green";
+ 
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+ 
+  mediaRecorder = new MediaRecorder(stream);
+  audioChunks = [];
+ 
+  mediaRecorder.ondataavailable = e => {
+    audioChunks.push(e.data);
+  };
+ 
+  mediaRecorder.start();
+ 
+  beep(true);
+}
+ 
+// 🛑 STOP RECORD
+function stopRecording() {
+  document.getElementById("light").style.background = "red";
+ 
+  mediaRecorder.stop();
+ 
+  mediaRecorder.onstop = () => {
+    const blob = new Blob(audioChunks, { type: 'audio/webm' });
+ 
+    conn.send(blob);
+ 
+    beep(false);
+  };
+}
+ 
+// 🔔 BEEP
 function beep(start) {
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
   const osc = ctx.createOscillator();
  
-  osc.type = "sine";
   osc.frequency.value = start ? 800 : 400;
- 
   osc.connect(ctx.destination);
   osc.start();
  
   setTimeout(() => osc.stop(), 150);
 }
+ 
+// INIT
+createPeer();
+ 
 </script>
  
 </body>
