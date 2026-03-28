@@ -41,7 +41,7 @@
  
 <script>
 let peer;
-let conn;
+let conn = null;
  
 let mediaRecorder;
 let audioChunks = [];
@@ -58,10 +58,19 @@ function createPeer(id=null) {
     document.getElementById("myid").innerText = id;
   });
  
+  // Incoming connection
   peer.on('connection', connection => {
     conn = connection;
-    setupConnection();
-    document.getElementById("status").innerText = "✅ Connected";
+ 
+    conn.on('open', () => {
+      document.getElementById("status").innerText = "✅ Connected";
+      setupConnection();
+    });
+ 
+    conn.on('close', () => {
+      document.getElementById("status").innerText = "❌ Disconnected";
+      conn = null;
+    });
   });
 }
  
@@ -71,10 +80,12 @@ function setID() {
   if (!id) return alert("Enter ID");
  
   if (peer) peer.destroy();
+ 
   createPeer(id);
+  document.getElementById("status").innerText = "❌ Not connected";
 }
  
-// CONNECT
+// CONNECT TO OTHER DEVICE
 function connect() {
   let id = document.getElementById("connectid").value;
   if (!id) return alert("Enter other ID");
@@ -83,9 +94,18 @@ function connect() {
  
   conn.on('open', () => {
     document.getElementById("status").innerText = "✅ Connected";
+    setupConnection();
   });
  
-  setupConnection();
+  conn.on('error', err => {
+    console.error(err);
+    document.getElementById("status").innerText = "❌ Connection error";
+  });
+ 
+  conn.on('close', () => {
+    document.getElementById("status").innerText = "❌ Disconnected";
+    conn = null;
+  });
 }
  
 // HANDLE DATA
@@ -120,13 +140,21 @@ function playQueue() {
     playQueue();
   };
  
-  audio.play();
+  audio.play().catch(() => {
+    // iPhone fix
+    document.body.onclick = () => audio.play();
+  });
 }
  
 // 🎤 START RECORD
 async function startRecording() {
-  if (!conn || !conn.open) {
-    alert("Not connected!");
+  if (!conn) {
+    alert("No connection!");
+    return;
+  }
+ 
+  if (conn.open !== true) {
+    alert("Still connecting... wait a sec");
     return;
   }
  
@@ -150,18 +178,22 @@ async function startRecording() {
 function stopRecording() {
   document.getElementById("light").style.background = "red";
  
+  if (!mediaRecorder) return;
+ 
   mediaRecorder.stop();
  
   mediaRecorder.onstop = () => {
     const blob = new Blob(audioChunks, { type: 'audio/webm' });
  
-    conn.send(blob);
+    if (conn && conn.open) {
+      conn.send(blob);
+    }
  
     beep(false);
   };
 }
  
-// 🔔 BEEP
+// 🔔 BEEP SOUND
 function beep(start) {
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
   const osc = ctx.createOscillator();
