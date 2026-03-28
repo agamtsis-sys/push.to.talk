@@ -11,9 +11,16 @@
 <h3>Your ID:</h3>
 <p id="myid">Connecting...</p>
  
-<input id="connectid" placeholder="Enter other device ID" style="padding:10px; width:250px;">
+<h3>Status:</h3>
+<p id="status">❌ Not connected</p>
+ 
+<input id="customid" placeholder="Enter your ID (optional)" style="padding:10px;">
+<button onclick="setID()">Set My ID</button>
+ 
 <br><br>
-<button onclick="connect()" style="padding:10px 20px;">Connect</button>
+ 
+<input id="connectid" placeholder="Enter other device ID" style="padding:10px;">
+<button onclick="connect()">Connect</button>
  
 <br><br><br>
  
@@ -27,57 +34,90 @@
 </button>
  
 <script>
-let peer = new Peer();
+let peer;
+let conn;
 let currentCall;
 let stream;
  
-// Show your ID
-peer.on('open', id => {
-  document.getElementById("myid").innerText = id;
-});
+// CREATE PEER (with optional custom ID)
+function createPeer(id=null) {
+  peer = new Peer(id);
  
-// Connect (just for user flow)
-function connect() {
-  alert("Connected! Now hold the button to talk.");
+  peer.on('open', id => {
+    document.getElementById("myid").innerText = id;
+  });
+ 
+  // 🔥 CONNECTION RECEIVED
+  peer.on('connection', connection => {
+    conn = connection;
+    document.getElementById("status").innerText = "✅ Connected";
+  });
+ 
+  // 🔊 RECEIVE AUDIO
+  peer.on('call', call => {
+    call.answer();
+ 
+    call.on('stream', remoteStream => {
+      let audio = new Audio();
+      audio.srcObject = remoteStream;
+      audio.play();
+    });
+  });
 }
  
-// Get mic once
+// SET CUSTOM ID
+function setID() {
+  let id = document.getElementById("customid").value;
+  if (!id) {
+    alert("Enter an ID!");
+    return;
+  }
+ 
+  if (peer) peer.destroy(); // reset
+ 
+  createPeer(id);
+}
+ 
+// CONNECT TO OTHER DEVICE
+function connect() {
+  let id = document.getElementById("connectid").value;
+  if (!id) {
+    alert("Enter other ID!");
+    return;
+  }
+ 
+  conn = peer.connect(id);
+ 
+  conn.on('open', () => {
+    document.getElementById("status").innerText = "✅ Connected";
+  });
+}
+ 
+// GET MIC
 async function getMic() {
   if (!stream) {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   }
 }
  
-// Start talking (hold)
+// PUSH TO TALK START
 async function startTalking() {
-  const id = document.getElementById("connectid").value;
-  if (!id) {
-    alert("Enter the other device ID first!");
-    return;
-  }
+  let id = document.getElementById("connectid").value;
+  if (!id) return;
  
   await getMic();
  
   currentCall = peer.call(id, stream);
 }
  
-// Stop talking (release)
+// STOP TALKING
 function stopTalking() {
-  if (currentCall) {
-    currentCall.close();
-  }
+  if (currentCall) currentCall.close();
 }
  
-// Receive audio
-peer.on('call', call => {
-  call.answer();
+// INIT DEFAULT
+createPeer();
  
-  call.on('stream', remoteStream => {
-    let audio = new Audio();
-    audio.srcObject = remoteStream;
-    audio.play();
-  });
-});
 </script>
  
 </body>
