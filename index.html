@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Walkie Talkie</title>
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+</head>
+<body style="font-family:sans-serif; text-align:center; margin-top:50px;">
+ 
+<h1>📡 Walkie Talkie</h1>
+ 
+<h3>Your ID:</h3>
+<p id="myid">Connecting...</p>
+ 
+<input id="connectid" placeholder="Enter other device ID" style="padding:10px; width:250px;">
+<br><br>
+<button onclick="connect()" style="padding:10px 20px;">Connect</button>
+ 
+<br><br><br>
+ 
+<button 
+  onmousedown="startTalking()" 
+  onmouseup="stopTalking()"
+  ontouchstart="startTalking()" 
+  ontouchend="stopTalking()"
+  style="padding:25px; font-size:20px; border-radius:10px;">
+  🎤 HOLD TO TALK
+</button>
+ 
+<script>
+let peer = new Peer();
+let currentCall;
+let stream;
+ 
+// Show your ID
+peer.on('open', id => {
+  document.getElementById("myid").innerText = id;
+});
+ 
+// Connect (just for user flow)
+function connect() {
+  alert("Connected! Now hold the button to talk.");
+}
+ 
+// Get mic once
+async function getMic() {
+  if (!stream) {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  }
+}
+ 
+// Start talking (hold)
+async function startTalking() {
+  const id = document.getElementById("connectid").value;
+  if (!id) {
+    alert("Enter the other device ID first!");
+    return;
+  }
+ 
+  await getMic();
+ 
+  currentCall = peer.call(id, stream);
+}
+ 
+// Stop talking (release)
+function stopTalking() {
+  if (currentCall) {
+    currentCall.close();
+  }
+}
+ 
+// Receive audio
+peer.on('call', call => {
+  call.answer();
+ 
+  call.on('stream', remoteStream => {
+    let audio = new Audio();
+    audio.srcObject = remoteStream;
+    audio.play();
+  });
+});
+</script>
+ 
+</body>
+</html>
